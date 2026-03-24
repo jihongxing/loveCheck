@@ -8,8 +8,10 @@ export default defineConfig({
     cssMinify: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vue-vendor': ['vue', 'vue-i18n'],
+        manualChunks(id) {
+          if (id.includes('node_modules/vue') || id.includes('node_modules/vue-i18n')) {
+            return 'vue-vendor'
+          }
         }
       }
     }

@@ -1,5 +1,7 @@
-const CACHE_NAME = 'lovertrust-v5';
+const CACHE_NAME = 'lovertrust-v6';
 const PRECACHE_URLS = [
+  '/',
+  '/index.html',
   '/favicon.svg',
 ];
 
@@ -46,11 +48,13 @@ self.addEventListener('fetch', (event) => {
   // Hashed assets — let browser handle directly, no SW interception
   if (url.pathname.startsWith('/assets/')) return;
 
-  // Navigation requests — always network-first, never serve stale HTML
+  // Navigation requests — network-first, cache fallback, then let browser handle
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request, { cache: 'no-cache' })
-        .catch(() => caches.match('/index.html'))
+        .catch(() =>
+          caches.match('/index.html').then(cached => cached || fetch(event.request))
+        )
     );
     return;
   }

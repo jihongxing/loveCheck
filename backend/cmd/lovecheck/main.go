@@ -50,7 +50,7 @@ func main() {
 
 	writeLimiter := middleware.RateLimitMiddleware(10, 1*time.Minute)
 	readLimiter := middleware.RateLimitMiddleware(60, 1*time.Minute)
-	adminLimiter := middleware.RateLimitMiddleware(30, 1*time.Minute)
+	adminLimiter := middleware.RateLimitMiddleware(120, 1*time.Minute)
 
 	api := router.Group("/api/v1")
 	{

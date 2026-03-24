@@ -1,6 +1,11 @@
 # LoveCheck Production — Dual Domain with Auto HTTPS
 # Caddy automatically obtains and renews Let's Encrypt certificates.
 
+# Redirect www to non-www
+www.haball.cc, www.hbball.cc {
+	redir https://{labels.1}.{labels.0}{uri} permanent
+}
+
 haball.cc, hbball.cc {
 	# Security headers
 	header {

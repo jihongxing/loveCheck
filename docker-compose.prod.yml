@@ -1,6 +1,24 @@
 version: "3.8"
 
 services:
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
+
   postgres:
     image: postgres:16-alpine
     restart: always
@@ -15,13 +33,28 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
 
   redis:
     image: redis:7-alpine
     restart: always
-    command: redis-server --requirepass ${REDIS_PASSWORD:-lovecheck_redis_pwd}
+    command: redis-server --requirepass ${REDIS_PASSWORD:-lovecheck_redis_pwd} --maxmemory 128mb --maxmemory-policy allkeys-lru
     volumes:
       - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-lovecheck_redis_pwd}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
 
   minio:
     image: minio/minio:latest
@@ -32,6 +65,16 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-lovecheck_minio_pwd}
     volumes:
       - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
 
   backend:
     build: ./backend
@@ -40,7 +83,7 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       minio:
         condition: service_started
     environment:
@@ -60,12 +103,12 @@ services:
       MINIO_USE_SSL: "false"
       ADMIN_SECRET: ${ADMIN_SECRET:-changeme_admin_secret}
       SEARCH_PEPPER: ${SEARCH_PEPPER:-changeme_search_pepper}
-      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://haball.cc,https://hbball.cc}
       XUNHU_APPID: ${XUNHU_APPID:-}
       XUNHU_APPSECRET: ${XUNHU_APPSECRET:-}
       XUNHU_GATEWAY: ${XUNHU_GATEWAY:-https://api.xunhupay.com}
       PAY_NOTIFY_URL: ${PAY_NOTIFY_URL:-}
-      PAY_RETURN_URL: ${PAY_RETURN_URL:-/}
+      PAY_RETURN_URL: ${PAY_RETURN_URL:-https://haball.cc/}
       PAY_PRICE: ${PAY_PRICE:-19.9}
       XUNHU_ALI_APPID: ${XUNHU_ALI_APPID:-}
       XUNHU_ALI_APPSECRET: ${XUNHU_ALI_APPSECRET:-}
@@ -74,16 +117,30 @@ services:
       PAYPAL_MODE: ${PAYPAL_MODE:-live}
       PAYPAL_PRICE: ${PAYPAL_PRICE:-2.99}
       PAYPAL_CURRENCY: ${PAYPAL_CURRENCY:-USD}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_EMAIL: ${VAPID_EMAIL:-admin@haball.cc}
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
 
   frontend:
     build: ./frontend
     restart: always
     depends_on:
       - backend
-    ports:
-      - "${PUBLIC_PORT:-80}:80"
+    # No ports exposed — Caddy handles external traffic
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
 
 volumes:
   pgdata:
   redisdata:
   miniodata:
+  caddy_data:
+  caddy_config:

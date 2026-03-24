@@ -268,6 +268,25 @@ func HandlePayNotify(c *gin.Context) {
 		return
 	}
 
+	// Verify payment amount matches the order to prevent amount tampering
+	callbackAmount := params["total_fee"]
+	if callbackAmount != "" && callbackAmount != order.Amount {
+		logger.Log.Warn().
+			Str("order_no", orderNo).
+			Str("expected", order.Amount).
+			Str("received", callbackAmount).
+			Msg("Payment amount mismatch in callback")
+		c.String(http.StatusOK, "fail")
+		return
+	}
+
+	// Reject callbacks for orders older than 24 hours (replay protection)
+	if time.Since(order.CreatedAt) > 24*time.Hour {
+		logger.Log.Warn().Str("order_no", orderNo).Msg("Payment callback for expired order")
+		c.String(http.StatusOK, "fail")
+		return
+	}
+
 	now := time.Now()
 	db.DB.Model(&order).Updates(map[string]interface{}{
 		"status":         "paid",

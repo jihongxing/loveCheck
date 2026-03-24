@@ -197,6 +197,7 @@ const doLogin = async () => {
     stats.value = await res.json()
     authed.value = true
     sessionStorage.setItem('lt_admin_secret', secret.value)
+    sessionStorage.setItem('lt_admin_ts', Date.now().toString())
     loadPlatforms()
   } catch {
     loginError.value = t('admin.login_network')
@@ -207,6 +208,8 @@ const doLogout = () => {
   authed.value = false
   secret.value = ''
   stats.value = null
+  platforms.value = []
+  generatedCodes.value = []
   sessionStorage.removeItem('lt_admin_secret')
 }
 
@@ -295,9 +298,22 @@ const formatTime = (t) => {
 onMounted(() => {
   const saved = sessionStorage.getItem('lt_admin_secret')
   if (saved) {
+    // Check session age (auto-expire after 2 hours)
+    const savedAt = sessionStorage.getItem('lt_admin_ts')
+    if (savedAt && Date.now() - parseInt(savedAt) > 2 * 60 * 60 * 1000) {
+      sessionStorage.removeItem('lt_admin_secret')
+      sessionStorage.removeItem('lt_admin_ts')
+      return
+    }
     secret.value = saved
     doLogin()
   }
+
+  // Clear session on tab/window close
+  window.addEventListener('beforeunload', () => {
+    sessionStorage.removeItem('lt_admin_secret')
+    sessionStorage.removeItem('lt_admin_ts')
+  })
 })
 </script>
 

@@ -1,0 +1,28 @@
+# LoveCheck Production — Dual Domain with Auto HTTPS
+# Caddy automatically obtains and renews Let's Encrypt certificates.
+
+haball.cc, hbball.cc {
+	# Security headers
+	header {
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# Reverse proxy to frontend nginx (which handles SPA + API proxy)
+	reverse_proxy frontend:80
+
+	# Compress responses
+	encode gzip zstd
+
+	# Access log
+	log {
+		output file /data/access.log {
+			roll_size 50MiB
+			roll_keep 5
+		}
+	}
+}

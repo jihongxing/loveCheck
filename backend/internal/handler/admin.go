@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
-	mrand "math/rand"
 	"net/http"
 	"os"
 	"time"
@@ -25,12 +24,48 @@ func getAdminSecret() string {
 
 func AdminAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		clientIP := c.ClientIP()
+
+		// Check if IP is temporarily locked out from admin login
+		if middleware.RedisClient != nil {
+			ctx := c.Request.Context()
+			lockKey := "admin_lock:" + clientIP
+			if middleware.RedisClient.Exists(ctx, lockKey).Val() > 0 {
+				c.JSON(http.StatusTooManyRequests, gin.H{"error": "too_many_attempts"})
+				c.Abort()
+				return
+			}
+		}
+
 		secret := c.GetHeader("X-Admin-Secret")
 		if subtle.ConstantTimeCompare([]byte(secret), []byte(getAdminSecret())) != 1 {
+			// Track failed attempts
+			if middleware.RedisClient != nil {
+				ctx := c.Request.Context()
+				failKey := "admin_fail:" + clientIP
+				count, _ := middleware.RedisClient.Incr(ctx, failKey).Result()
+				if count == 1 {
+					middleware.RedisClient.Expire(ctx, failKey, 15*time.Minute)
+				}
+				// Lock out after 5 failed attempts for 15 minutes
+				if count >= 5 {
+					lockKey := "admin_lock:" + clientIP
+					middleware.RedisClient.Set(ctx, lockKey, "1", 15*time.Minute)
+					middleware.RedisClient.Del(ctx, failKey)
+				}
+			}
 			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 			c.Abort()
 			return
 		}
+
+		// Reset fail counter on successful auth
+		if middleware.RedisClient != nil {
+			ctx := c.Request.Context()
+			failKey := "admin_fail:" + clientIP
+			middleware.RedisClient.Del(ctx, failKey)
+		}
+
 		c.Next()
 	}
 }
@@ -116,16 +151,12 @@ func HandlePublicStats(c *gin.Context) {
 	var usedCodes int64
 	db.DB.Model(&model.ActivationCode{}).Where("status = ?", "used").Count(&usedCodes)
 
-	const reportOffset = 20000
-	jitter := int64(mrand.Intn(801) + 200) // 200~1000
-	displayReports := totalReports + reportOffset + jitter
-	displayReports = displayReports / 100 * 100
+	// Round to nearest hundred for display (no artificial inflation)
+	displayReports := (totalReports / 100) * 100
+	displayAlerts := (usedCodes / 100) * 100
 
-	displayAlerts := usedCodes + int64(float64(reportOffset)*0.25)
-	displayAlerts = displayAlerts / 100 * 100
-
-	if distinctCities < 10 {
-		distinctCities = 10
+	if distinctCities < 1 {
+		distinctCities = 1
 	}
 
 	result := gin.H{

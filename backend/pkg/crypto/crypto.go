@@ -14,6 +14,11 @@ func getSearchPepper() string {
 	return "lovecheck_default_pepper_2026"
 }
 
+// GetEvidencePepper returns a pepper derived from SEARCH_PEPPER for evidence token signing.
+func GetEvidencePepper() string {
+	return "evd:" + getSearchPepper()
+}
+
 // DeterministicHash computes HMAC-SHA256(data, pepper) and returns a hex string.
 // Unlike bcrypt, the same input always produces the same output, enabling O(1)
 // indexed lookups instead of O(n) full-table scans with per-row comparison.

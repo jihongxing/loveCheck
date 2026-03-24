@@ -5,11 +5,13 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/SherClockHolmes/webpush-go"
 	"github.com/gin-gonic/gin"
 
 	"lovecheck/internal/db"
+	"lovecheck/internal/middleware"
 	"lovecheck/internal/model"
 	"lovecheck/pkg/crypto"
 	"lovecheck/pkg/logger"
@@ -26,6 +28,7 @@ func HandleGetVAPIDKey(c *gin.Context) {
 }
 
 // HandlePushSubscribe stores a browser push subscription for a watched phone.
+// Limited to 5 subscriptions per IP per hour to prevent abuse.
 func HandlePushSubscribe(c *gin.Context) {
 	var req struct {
 		Phone      string `json:"phone"`
@@ -42,6 +45,20 @@ func HandlePushSubscribe(c *gin.Context) {
 	if len(req.Endpoint) > 2000 || len(req.KeyAuth) > 200 || len(req.KeyP256dh) > 200 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "payload_too_large"})
 		return
+	}
+
+	// Rate limit push subscriptions per IP
+	if middleware.RedisClient != nil {
+		ctx := c.Request.Context()
+		subKey := "push_sub:" + c.ClientIP()
+		count, _ := middleware.RedisClient.Incr(ctx, subKey).Result()
+		if count == 1 {
+			middleware.RedisClient.Expire(ctx, subKey, 1*time.Hour)
+		}
+		if count > 5 {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "subscription_limit_exceeded"})
+			return
+		}
 	}
 
 	targetHash := crypto.DeterministicHash(req.Phone)

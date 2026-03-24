@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -49,6 +50,7 @@ func main() {
 
 	writeLimiter := middleware.RateLimitMiddleware(10, 1*time.Minute)
 	readLimiter := middleware.RateLimitMiddleware(60, 1*time.Minute)
+	adminLimiter := middleware.RateLimitMiddleware(30, 1*time.Minute)
 
 	api := router.Group("/api/v1")
 	{
@@ -72,7 +74,7 @@ func main() {
 		api.GET("/evidence/:filename", handler.GetEvidence)
 
 		api.POST("/pay/create", writeLimiter, handler.HandlePayCreate)
-		api.POST("/pay/notify", handler.HandlePayNotify)
+		api.POST("/pay/notify", writeLimiter, handler.HandlePayNotify)
 		api.GET("/pay/status", readLimiter, handler.HandlePayStatus)
 		api.POST("/pay/paypal-capture", writeLimiter, handler.HandlePayPalCapture)
 
@@ -81,7 +83,7 @@ func main() {
 		api.POST("/push/unsubscribe", writeLimiter, handler.HandlePushUnsubscribe)
 
 		admin := api.Group("/admin")
-		admin.Use(handler.AdminAuth())
+		admin.Use(adminLimiter, handler.AdminAuth())
 		{
 			admin.GET("/generate-codes", handler.HandleGenerateCodes)
 			admin.GET("/unused-codes", handler.HandleListUnusedCodes)
@@ -105,7 +107,12 @@ func main() {
 
 func getAllowedOrigins() []string {
 	if origin := os.Getenv("CORS_ORIGIN"); origin != "" {
-		return []string{origin}
+		// Support comma-separated origins for multi-domain setups
+		origins := strings.Split(origin, ",")
+		for i := range origins {
+			origins[i] = strings.TrimSpace(origins[i])
+		}
+		return origins
 	}
 	return []string{"*"}
 }

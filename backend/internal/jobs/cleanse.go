@@ -32,39 +32,56 @@ func StartCleanseScheduler(database *gorm.DB, interval time.Duration) {
 func runCleanseCheck(database *gorm.DB) {
 	logger.Log.Info().Msg("Running periodic cleanse check")
 
-	var allStats []model.TargetStats
-	database.Find(&allStats)
-
+	// Process in batches to avoid loading entire table into memory
+	const batchSize = 500
+	var offset int
 	cleansedCount := 0
 	restoredCount := 0
+	totalTargets := 0
 
-	for _, stats := range allStats {
-		if stats.ReporterVotes+stats.AppealVotes == 0 {
-			continue
+	for {
+		var batch []model.TargetStats
+		result := database.Offset(offset).Limit(batchSize).Find(&batch)
+		if result.Error != nil || len(batch) == 0 {
+			break
+		}
+		totalTargets += len(batch)
+
+		for _, stats := range batch {
+			totalVotes := stats.ReporterVotes + stats.AppealVotes
+			if totalVotes == 0 {
+				continue
+			}
+
+			// Match the threshold in HandleVote: need 2x ratio AND at least 10 total votes
+			shouldCleanse := totalVotes >= 10 && float64(stats.AppealVotes) > float64(stats.ReporterVotes)*2.0
+			hash := stats.TargetHash
+
+			if shouldCleanse {
+				result := database.Model(&model.RiskRecord{}).
+					Where("(target_hash = ? OR target_local_hash = ?) AND status = ?", hash, hash, "active").
+					Update("status", "cleansed_by_jury")
+				if result.RowsAffected > 0 {
+					cleansedCount += int(result.RowsAffected)
+				}
+			} else {
+				result := database.Model(&model.RiskRecord{}).
+					Where("(target_hash = ? OR target_local_hash = ?) AND status = ?", hash, hash, "cleansed_by_jury").
+					Update("status", "active")
+				if result.RowsAffected > 0 {
+					restoredCount += int(result.RowsAffected)
+				}
+			}
 		}
 
-		shouldCleanse := float64(stats.AppealVotes) > float64(stats.ReporterVotes)*1.5
-		hash := stats.TargetHash
-
-		if shouldCleanse {
-			result := database.Model(&model.RiskRecord{}).
-				Where("(target_hash = ? OR target_local_hash = ?) AND status = ?", hash, hash, "active").
-				Update("status", "cleansed_by_jury")
-			if result.RowsAffected > 0 {
-				cleansedCount += int(result.RowsAffected)
-			}
-		} else {
-			result := database.Model(&model.RiskRecord{}).
-				Where("(target_hash = ? OR target_local_hash = ?) AND status = ?", hash, hash, "cleansed_by_jury").
-				Update("status", "active")
-			if result.RowsAffected > 0 {
-				restoredCount += int(result.RowsAffected)
-			}
+		if len(batch) < batchSize {
+			break
 		}
+		offset += batchSize
 	}
 
 	logger.Log.Info().
-		Int("total_targets", len(allStats)).
+		Int("total_targets", totalTargets).
 		Int("cleansed_records", cleansedCount).
 		Int("restored_records", restoredCount).
 		Msg("Cleanse check completed")

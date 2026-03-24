@@ -282,3 +282,94 @@ docker system prune -f
 - [ ] HTTPS 已配置
 - [ ] 数据库备份定时任务已设置
 - [ ] Admin 密钥足够复杂
+
+---
+
+## 十二、从 GitHub 自动部署（Deploy Key + Actions SSH）
+
+推送 `main` 且 [CI](.github/workflows/ci.yml) 成功后，会触发 [Deploy](.github/workflows/deploy.yml)，通过 SSH 在服务器上执行 `git pull` 与 `docker compose`。需要两类 SSH 密钥，用途不同，请勿混用。
+
+### 12.1 密钥分工
+
+| 密钥 | 用途 | 私钥存放位置 |
+|------|------|----------------|
+| **仓库 Deploy Key** | 服务器从 GitHub **拉代码**（`git pull`） | 仅保存在服务器 `~/.ssh/` |
+| **Actions 部署密钥** | **GitHub Actions** 登录你的服务器执行命令 | 填入仓库 Secret `DEPLOY_SSH_PRIVATE_KEY` |
+
+### 12.2 在服务器上：配置 Deploy Key（拉代码）
+
+在服务器上以将执行部署的用户登录（例如 `ubuntu`）：
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/lovecheck_repo -N "" -C "lovecheck-deploy-key"
+```
+
+将 **公钥** `~/.ssh/lovecheck_repo.pub` 全文复制到 GitHub：仓库 **Settings → Deploy keys → Add deploy key**，勾选 **Allow read access**（不要勾选 write，除非确有需要）。
+
+配置 SSH 只对 `github.com` 使用该私钥：
+
+```bash
+cat >> ~/.ssh/config << 'EOF'
+Host github.com
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/lovecheck_repo
+  IdentitiesOnly yes
+EOF
+chmod 600 ~/.ssh/config ~/.ssh/lovecheck_repo
+```
+
+首次部署前克隆（路径需与下方 Secret `DEPLOY_PATH` 一致，例如 `/opt/lovecheck`）：
+
+```bash
+sudo mkdir -p /opt/lovecheck
+sudo chown "$USER:$USER" /opt/lovecheck
+git clone git@github.com:jihongxing/loveCheck.git /opt/lovecheck
+cd /opt/lovecheck
+cp .env.prod.example .env
+# 编辑 .env …
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+确保该用户可使用 Docker（任选其一）：`sudo usermod -aG docker "$USER"` 后重新登录，或把脚本里的 `docker compose` 改成 `sudo docker compose`。
+
+### 12.3 在服务器上：配置 Actions 登录用的公钥
+
+在**本机或服务器**再生成一对专给 CI 用的密钥（不要用 Deploy Key 那对）：
+
+```bash
+ssh-keygen -t ed25519 -f ./gha_lovecheck -N "" -C "github-actions-deploy"
+```
+
+将 **`gha_lovecheck.pub`** 追加到部署用户主目录：
+
+```bash
+cat gha_lovecheck.pub >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+```
+
+将 **`gha_lovecheck`（私钥）** 的完整内容（含 `BEGIN` / `END` 行）复制到 GitHub 仓库 **Settings → Secrets and variables → Actions → New repository secret**，名称：`DEPLOY_SSH_PRIVATE_KEY`。私钥文件不要上传仓库，用毕可删除本地副本。
+
+### 12.4 GitHub 仓库 Secrets / Variables
+
+在 **Settings → Secrets and variables → Actions** 中新增 **Secrets**：
+
+| Name | 说明 |
+|------|------|
+| `DEPLOY_HOST` | 服务器公网 IP 或域名 |
+| `DEPLOY_USER` | SSH 登录用户名 |
+| `DEPLOY_SSH_PRIVATE_KEY` | 上一节的 CI 用私钥全文 |
+| `DEPLOY_PATH` | 仓库在服务器上的绝对路径，如 `/opt/lovecheck` |
+| `DEPLOY_KNOWN_HOSTS` | 在任意机器执行 `ssh-keyscan -p 22 -H <DEPLOY_HOST>` 的完整输出（多行），用于校验主机指纹 |
+
+非 22 端口时，在 **Variables** 中增加 `DEPLOY_SSH_PORT`（例如 `2222`）；未设置则默认 `22`。
+
+### 12.5 手动触发部署
+
+在 GitHub 打开 **Actions → Deploy → Run workflow**，可在不推送代码时重新部署当前 `main`。
+
+### 12.6 常见问题
+
+- **Deploy 未运行**：确认是推送到 `main` 且 **CI** 工作流已成功结束；Pull Request 仅跑 CI，不会自动部署。
+- **`git pull` 失败**：检查 Deploy Key 是否已添加、服务器 `~/.ssh/config` 是否指向正确私钥、`origin` 是否为 `git@github.com:jihongxing/loveCheck.git`（`git remote -v`）。
+- **SSH 连接被拒**：检查安全组/防火墙放行 SSH 端口、`DEPLOY_KNOWN_HOSTS` 是否与当前主机密钥一致。

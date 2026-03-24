@@ -1,0 +1,28 @@
+# Secrets & local env (never commit)
+.env
+.env.*
+!.env.prod.example
+backend/.env
+!backend/.env.example
+
+# Dependencies & build output
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+
+# Go / local dev artifacts
+backend/*.exe
+backend/__debug_bin*
+backend/data.db
+backend/test_evidence.jpg
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+*.log
+npm-debug.log*

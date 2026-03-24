@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # Redis service for rate limiting and caching
+  # Redis 服务，用于接口限流与防女巫攻击时的状态缓存
+  redis:
+    image: redis:7-alpine
+    container_name: lovecheck_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    # Set a password for Redis security
+    # 为 Redis 设置访问密码，增强安全性
+    command: redis-server --requirepass "lovecheck_redis_pwd"
+    restart: unless-stopped
+
+  # MinIO service for scalable object storage (e.g., uploading evidence images and voices)
+  # MinIO 服务，用于分布式对象存储（如存放用户上传的截图和录音等凭证文件）
+  minio:
+    image: minio/minio:latest
+    container_name: lovecheck_minio
+    ports:
+      - "9000:9000" # API endpoint port / 接口端点暴露端口
+      - "9001:9001" # Web console port / Web 控制台管理端口
+    environment:
+      # Set MinIO root user credentials
+      # 设置 MinIO 管理员的账号凭据
+      MINIO_ROOT_USER: "lovecheck_admin"
+      MINIO_ROOT_PASSWORD: "lovecheck_minio_pwd"
+    volumes:
+      - minio_data:/data
+    # Start the MinIO server specifying data directory and console port
+    # 启动 MinIO 服务，指定数据存储目录与控制台端口
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+
+volumes:
+  # Define volumes for persistent data
+  # 定义卷以便数据持久化，防止容器重启造成数据丢失
+  redis_data:
+  minio_data:

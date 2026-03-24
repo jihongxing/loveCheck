@@ -1,0 +1,163 @@
+:root {
+  --silicon-bg: #131419;
+  --silicon-surface: #17181d;
+  --silicon-highlight: rgba(255, 255, 255, 0.03);
+  --silicon-shadow: rgba(0, 0, 0, 0.8);
+  
+  --text-primary: #e2e8f0;
+  --text-secondary: #8b949e;
+  --accent-neon: #00f0ff;
+  --accent-pink: #ff0055;
+  --safe-neon: #00ff66;
+  --danger-neon: #ff0055;
+  
+  --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 30px;
+  
+  /* Neumorphic / Silicon shadows */
+  --shadow-out: 8px 8px 16px var(--silicon-shadow), -8px -8px 16px var(--silicon-highlight);
+  --shadow-in: inset 6px 6px 12px var(--silicon-shadow), inset -6px -6px 12px var(--silicon-highlight);
+  --shadow-neon: 0 0 10px rgba(0, 240, 255, 0.3), inset 0 0 5px rgba(0, 240, 255, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--silicon-bg);
+  color: var(--text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#app {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* Silicon / Neumorphism panel */
+.glass-panel {
+  background: var(--silicon-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-out);
+  padding: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+/* Animated gradient text (Cyberpunk Vibe) */
+.text-gradient {
+  background: linear-gradient(135deg, var(--accent-neon), var(--accent-pink));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+  text-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
+}
+
+/* Silicon Inset Inputs */
+.input-premium {
+  width: 100%;
+  background: var(--silicon-surface);
+  border: none;
+  color: var(--accent-neon);
+  padding: 16px 20px;
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  box-shadow: var(--shadow-in);
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  outline: none;
+  font-weight: 500;
+  letter-spacing: 1px;
+}
+.input-premium::placeholder {
+  color: var(--text-secondary);
+  font-weight: 400;
+  letter-spacing: normal;
+}
+.input-premium:focus {
+  box-shadow: var(--shadow-in), 0 0 8px rgba(0, 240, 255, 0.4);
+}
+
+/* Silicon Extruded Buttons */
+.btn-premium {
+  background: var(--silicon-surface);
+  color: var(--accent-neon);
+  border: 1px solid rgba(0, 240, 255, 0.1);
+  padding: 16px 28px;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 1rem;
+  letter-spacing: 1px;
+  cursor: pointer;
+  box-shadow: var(--shadow-out);
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+}
+.btn-premium:hover {
+  color: #fff;
+  border-color: var(--accent-neon);
+  box-shadow: var(--shadow-out), 0 0 15px rgba(0, 240, 255, 0.4);
+  text-shadow: 0 0 5px rgba(0, 240, 255, 0.8);
+}
+.btn-premium:active {
+  box-shadow: var(--shadow-in);
+  transform: translateY(2px);
+}
+.btn-premium:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+  color: var(--text-secondary);
+  border-color: rgba(255,255,255,0.05);
+}
+
+/* Silicon Warning Layout */
+.radar-warning {
+  animation: pulse-silicon 2s infinite;
+}
+@keyframes pulse-silicon {
+  0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 0, 85, 0.6); }
+  70% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(255, 0, 85, 0); }
+  100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 0, 85, 0); }
+}
+
+/* App container strictly centered */
+.app-container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 40px 20px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== Mobile Responsive ===== */
+@media (max-width: 480px) {
+  .app-container {
+    padding: 16px 10px;
+  }
+  .glass-panel {
+    padding: 18px 14px;
+    border-radius: 14px;
+  }
+  .btn-premium {
+    padding: 12px 18px;
+    font-size: 0.9rem;
+    letter-spacing: 0.5px;
+  }
+  .input-premium {
+    padding: 12px 14px;
+    font-size: 0.9rem;
+  }
+}

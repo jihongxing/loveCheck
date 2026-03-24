@@ -1,0 +1,17 @@
+{
+  "name": "LoverTrust - Relationship Risk Shield",
+  "short_name": "LoverTrust",
+  "description": "Community-driven relationship risk verification platform.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a10",
+  "theme_color": "#00f0ff",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,12 +1,8 @@
-# LoveCheck Production — Dual Domain with Auto HTTPS
-# Caddy automatically obtains and renews Let's Encrypt certificates.
+# LoveCheck Production — Behind Cloudflare Proxy
+# Cloudflare handles TLS termination. Caddy listens on HTTP only.
+# Set Cloudflare SSL mode to "Flexible" or use Cloudflare Origin Certificate with "Full (Strict)".
 
-# Redirect www to non-www
-www.haball.cc, www.hbball.cc {
-	redir https://{labels.1}.{labels.0}{uri} permanent
-}
-
-haball.cc, hbball.cc {
+:80 {
 	# Security headers
 	header {
 		X-Frame-Options "SAMEORIGIN"
@@ -20,7 +16,7 @@ haball.cc, hbball.cc {
 	# Reverse proxy to frontend nginx (which handles SPA + API proxy)
 	reverse_proxy frontend:80
 
-	# Compress responses
+	# Caddy compresses responses to Cloudflare edge
 	encode gzip zstd
 
 	# Access log

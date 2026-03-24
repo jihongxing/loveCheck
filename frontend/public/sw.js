@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lovertrust-v4';
+const CACHE_NAME = 'lovertrust-v5';
 const PRECACHE_URLS = [
   '/favicon.svg',
 ];
@@ -43,12 +43,10 @@ self.addEventListener('fetch', (event) => {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
   if (url.pathname.startsWith('/api/')) return;
 
-  // Hashed assets (e.g. /assets/index-B8irZyNH.js) — always go to network, never serve stale cache
-  if (url.pathname.startsWith('/assets/')) {
-    return;  // Let the browser handle it normally, no SW interception
-  }
+  // Hashed assets — let browser handle directly, no SW interception
+  if (url.pathname.startsWith('/assets/')) return;
 
-  // For navigation requests (HTML), always network-first with short timeout
+  // Navigation requests — always network-first, never serve stale HTML
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request, { cache: 'no-cache' })
@@ -57,7 +55,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Other static files (favicon, manifest, etc.) — network-first with cache fallback
+  // Other static files (favicon, manifest) — network-first with cache fallback
   event.respondWith(
     fetch(event.request)
       .then((response) => {

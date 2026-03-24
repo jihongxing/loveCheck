@@ -178,6 +178,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { loadLocaleMessages } from './i18n/index.js'
 import Search from './components/Search.vue'
 import Report from './components/Report.vue'
 import Appeal from './components/Appeal.vue'
@@ -196,7 +197,8 @@ const langs = [
   { code: 'hi', label: 'हिन्दी' },
 ]
 
-const switchLang = (lang) => {
+const switchLang = async (lang) => {
+  await loadLocaleMessages(lang)
   locale.value = lang
   localStorage.setItem('loveTrust_locale', lang)
 }

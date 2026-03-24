@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lovertrust-v1';
+const CACHE_NAME = 'lovertrust-v2';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
@@ -16,9 +16,8 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((names) =>
       Promise.all(names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n)))
-    )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('push', (event) => {

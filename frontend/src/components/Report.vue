@@ -230,7 +230,34 @@ const triggerFileInput = () => {
   fileInput.value.click()
 }
 
-const handleFileChange = (e) => {
+// Compress image to max 1200px and ~0.8 quality JPEG, capped at 500KB
+function compressImage(file, maxWidth = 1200, quality = 0.8) {
+  return new Promise((resolve) => {
+    // Skip non-image or already small files
+    if (!file.type.startsWith('image/') || file.size < 200 * 1024) {
+      resolve(file)
+      return
+    }
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      let w = img.width, h = img.height
+      if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth }
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+      canvas.toBlob((blob) => {
+        if (!blob) { resolve(file); return }
+        resolve(new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' }))
+      }, 'image/jpeg', quality)
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file) }
+    img.src = url
+  })
+}
+
+const handleFileChange = async (e) => {
   const files = Array.from(e.target.files)
   if (files.length === 0) return
   
@@ -238,8 +265,11 @@ const handleFileChange = (e) => {
     errorMsg.value = t('report.alert_max_files')
     return
   }
-  form.value.evidenceFiles.push(...files)
-  // reset file input value in case same files selected again
+  // Compress each image before adding
+  for (const file of files) {
+    const compressed = await compressImage(file)
+    form.value.evidenceFiles.push(compressed)
+  }
   e.target.value = ''
 }
 

@@ -31,6 +31,16 @@
         @click="currentTab = 'appeal'">
         {{ $t('app.nav.appeal') }}
       </button>
+      <button
+        :class="['tab-btn', { active: currentTab === 'companySearch' }]"
+        @click="currentTab = 'companySearch'">
+        {{ $t('app.nav.companySearch') }}
+      </button>
+      <button
+        :class="['tab-btn', { active: currentTab === 'companyReport' }]"
+        @click="currentTab = 'companyReport'">
+        {{ $t('app.nav.companyReport') }}
+      </button>
     </div>
 
     <!-- Main Content Area -->
@@ -38,6 +48,8 @@
       <Search v-if="currentTab === 'search'" />
       <Report v-if="currentTab === 'report'" />
       <Appeal v-if="currentTab === 'appeal'" />
+      <CompanySearch v-if="currentTab === 'companySearch'" />
+      <CompanyReport v-if="currentTab === 'companyReport'" />
       <Admin v-if="currentTab === 'admin'" />
     </main>
 
@@ -182,6 +194,8 @@ import { loadLocaleMessages } from './i18n/index.js'
 import Search from './components/Search.vue'
 import Report from './components/Report.vue'
 import Appeal from './components/Appeal.vue'
+import CompanySearch from './components/CompanySearch.vue'
+import CompanyReport from './components/CompanyReport.vue'
 import Admin from './components/Admin.vue'
 
 const { locale } = useI18n()

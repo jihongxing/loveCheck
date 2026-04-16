@@ -71,6 +71,13 @@ func main() {
 		api.GET("/platforms", readLimiter, handler.HandlePublicPlatforms)
 		api.GET("/stats/public", readLimiter, handler.HandlePublicStats)
 
+		// Company abuse reporting endpoints
+		api.POST("/company/report", writeLimiter, handler.HandleCompanyReport)
+		api.POST("/company/appeal", writeLimiter, handler.HandleCompanyAppeal)
+		api.POST("/company/vote", writeLimiter, handler.HandleCompanyVote)
+		api.GET("/company/query", readLimiter, handler.HandleCompanyQuery)
+		api.GET("/company/stats", readLimiter, handler.HandleCompanyStats)
+
 		api.GET("/evidence/:filename", handler.GetEvidence)
 
 		api.POST("/pay/create", writeLimiter, handler.HandlePayCreate)

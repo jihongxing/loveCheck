@@ -57,6 +57,9 @@ func InitDB() {
 		&model.PurchasePlatform{},
 		&model.PushSubscription{},
 		&model.PaymentOrder{},
+		&model.CompanyRecord{},
+		&model.CompanyStats{},
+		&model.CompanyWatchlist{},
 	)
 	if err != nil {
 		logger.Log.Fatal().Err(err).Msg("Auto-migration failed")
@@ -120,6 +123,29 @@ func createOptimizedIndexes() {
 		// Payment order lookups by target_hash
 		`CREATE INDEX IF NOT EXISTS idx_payment_target_hash
 		 ON payment_orders USING HASH (target_hash)`,
+
+		// Company records hash index
+		`CREATE INDEX IF NOT EXISTS idx_hash_company
+		 ON company_records USING HASH (company_hash)`,
+
+		// Company records partial index for active records
+		`CREATE INDEX IF NOT EXISTS idx_active_company_hash
+		 ON company_records (company_hash) WHERE status = 'active'`,
+
+		// Company stats fast lookup
+		`CREATE INDEX IF NOT EXISTS idx_company_stats_hash
+		 ON company_stats USING HASH (company_hash)`,
+
+		// GIN index on company tags for containment queries
+		`CREATE INDEX IF NOT EXISTS idx_company_records_tags
+		 ON company_records USING GIN (tags)`,
+
+		// Company watchlist indexes
+		`CREATE INDEX IF NOT EXISTS idx_company_watchlist_company
+		 ON company_watchlists USING HASH (company_hash)`,
+
+		`CREATE INDEX IF NOT EXISTS idx_company_watchlist_user
+		 ON company_watchlists USING HASH (user_hash)`,
 	}
 
 	for _, ddl := range indexes {

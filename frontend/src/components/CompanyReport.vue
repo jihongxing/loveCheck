@@ -189,6 +189,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PhoneInput from './PhoneInput.vue'
+import { getDialCode } from '../data/countryCodes.js'
 
 const { t, locale } = useI18n()
 
@@ -317,7 +318,7 @@ const submitReport = async () => {
   errorMsg.value = ''
 
   const formData = new FormData()
-  formData.append('reporter_phone', form.value.reporterPhone)
+  formData.append('reporter_phone', getDialCode(reporterCC.value) + form.value.reporterPhone)
   formData.append('company_name', form.value.companyName)
   formData.append('registration_no', form.value.registrationNo)
   formData.append('industry', form.value.industry)

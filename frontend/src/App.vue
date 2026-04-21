@@ -41,6 +41,11 @@
         @click="currentTab = 'companyReport'">
         {{ $t('app.nav.companyReport') }}
       </button>
+      <button
+        :class="['tab-btn', { active: currentTab === 'companyAppeal' }]"
+        @click="currentTab = 'companyAppeal'">
+        {{ $t('app.nav.companyAppeal') }}
+      </button>
     </div>
 
     <!-- Main Content Area -->
@@ -50,6 +55,7 @@
       <Appeal v-if="currentTab === 'appeal'" />
       <CompanySearch v-if="currentTab === 'companySearch'" />
       <CompanyReport v-if="currentTab === 'companyReport'" />
+      <CompanyAppeal v-if="currentTab === 'companyAppeal'" />
       <Admin v-if="currentTab === 'admin'" />
     </main>
 
@@ -196,6 +202,7 @@ import Report from './components/Report.vue'
 import Appeal from './components/Appeal.vue'
 import CompanySearch from './components/CompanySearch.vue'
 import CompanyReport from './components/CompanyReport.vue'
+import CompanyAppeal from './components/CompanyAppeal.vue'
 import Admin from './components/Admin.vue'
 
 const { locale } = useI18n()
@@ -253,6 +260,7 @@ onBeforeUnmount(() => {
 
 .nav-tabs {
   display: flex;
+  flex-wrap: wrap;
   background: var(--silicon-bg);
   border-radius: var(--radius-lg);
   padding: 8px;
@@ -261,7 +269,7 @@ onBeforeUnmount(() => {
   gap: 10px;
 }
 .tab-btn {
-  flex: 1;
+  flex: 1 1 140px;
   background: transparent;
   border: none;
   color: var(--text-secondary);

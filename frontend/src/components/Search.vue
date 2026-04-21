@@ -350,7 +350,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PhoneInput from './PhoneInput.vue'
 import { getDefaultCountry, getDialCode } from '../data/countryCodes.js'
@@ -379,6 +379,14 @@ const votingInProgress = ref(false)
 const voteResult = ref(null)
 const searchError = ref('')
 const previewImage = ref(null)
+const payOptions = ref({
+  code_enabled: true,
+  providers: {
+    wechat: false,
+    alipay: false,
+    paypal: false,
+  },
+})
 
 const copyLabel = ref('')
 const pushSupported = ref('serviceWorker' in navigator && 'PushManager' in window)
@@ -394,8 +402,21 @@ const isMobile = ref(/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent
 const paypalCapturing = ref(false)
 
 const availablePayMethods = computed(() => {
-  if (locale.value === 'zh') return ['wechat', 'alipay', 'code']
-  return ['paypal', 'code']
+  const methods = []
+  const providers = payOptions.value?.providers || {}
+
+  if (locale.value === 'zh') {
+    if (providers.wechat) methods.push('wechat')
+    if (providers.alipay) methods.push('alipay')
+  } else if (providers.paypal) {
+    methods.push('paypal')
+  }
+
+  if (payOptions.value?.code_enabled !== false || methods.length === 0) {
+    methods.push('code')
+  }
+
+  return methods
 })
 
 const voteCountReporter = computed(() => {
@@ -445,6 +466,19 @@ function starRating(level) {
   const lv = Number(level) || 1
   const n = lv >= 3 ? 5 : lv >= 2 ? 4 : 3
   return '\u2605'.repeat(n) + '\u2606'.repeat(5 - n)
+}
+
+const accessStorageKey = (targetHash) => `lt_access_${targetHash}`
+const getStoredAccessToken = (targetHash) => targetHash ? localStorage.getItem(accessStorageKey(targetHash)) || '' : ''
+const storeAccessToken = (targetHash, token) => {
+  if (targetHash && token) {
+    localStorage.setItem(accessStorageKey(targetHash), token)
+  }
+}
+const clearAccessToken = (targetHash) => {
+  if (targetHash) {
+    localStorage.removeItem(accessStorageKey(targetHash))
+  }
 }
 
 const shareText = () => {
@@ -504,6 +538,12 @@ const subscribeWatch = async () => {
 }
 
 onMounted(async () => {
+  try {
+    const payRes = await fetch('/api/v1/pay/options')
+    if (payRes.ok) {
+      payOptions.value = await payRes.json()
+    }
+  } catch {}
   initPayMethod()
 
   const urlParams = new URLSearchParams(window.location.search)
@@ -527,6 +567,12 @@ onMounted(async () => {
   } catch {}
 })
 
+watch(availablePayMethods, (methods) => {
+  if (!methods.includes(payMethod.value)) {
+    payMethod.value = methods[0] || 'code'
+  }
+}, { immediate: true })
+
 const mockAppealImage = computed(() =>
   "data:image/svg+xml;charset=utf-8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800"><rect width="600" height="800" fill="#131419"/><text x="50%" y="45%" fill="#facc15" font-size="26" text-anchor="middle" font-family="sans-serif">${t('search.mock_image_title')}</text><text x="50%" y="52%" fill="#888" font-size="18" text-anchor="middle" font-family="sans-serif">${t('search.mock_image_desc')}</text></svg>`)
 )
@@ -541,6 +587,53 @@ const openPreview = (url) => {
 }
 const closePreview = () => {
   previewImage.value = null
+}
+
+const requestSearch = async (fullPhone, accessToken = '') => {
+  const queryParams = new URLSearchParams({ phone: fullPhone, phone_local: phone.value })
+  if (remark.value.trim()) queryParams.set('remark', remark.value.trim())
+
+  const headers = {}
+  if (accessToken) {
+    headers['X-Access-Token'] = accessToken
+  }
+
+  const res = await fetch(`/api/v1/query?${queryParams}`, { headers })
+  const data = await res.json()
+  return { res, data }
+}
+
+const applyWarningResult = (data) => {
+  resultType.value = 'warning'
+  profile.value = data.aggregated_profile || {}
+  records.value = data.records || []
+  queryToken.value = data.query_token || ''
+  hasPaid.value = !!data.unlocked
+  searched.value = true
+}
+
+const refreshUnlockedWarning = async (accessToken) => {
+  if (!accessToken || !phoneValid.value) return false
+
+  const fullPhone = getDialCode(countryCode.value) + phone.value
+  try {
+    const { res, data } = await requestSearch(fullPhone, accessToken)
+    if (res.ok && data.status === 'warning' && data.unlocked) {
+      applyWarningResult(data)
+      return true
+    }
+  } catch {}
+  return false
+}
+
+const unlockCurrentResult = async (accessToken) => {
+  if (!accessToken || !queryToken.value) return false
+  storeAccessToken(queryToken.value, accessToken)
+  const ok = await refreshUnlockedWarning(accessToken)
+  if (!ok) {
+    clearAccessToken(queryToken.value)
+  }
+  return ok
 }
 
 const startXunhuPay = async (provider) => {
@@ -613,8 +706,12 @@ const capturePayPalOrder = async (orderNo) => {
       body: JSON.stringify({ order_no: orderNo }),
     })
     const data = await res.json()
-    if (data.paid) {
-      hasPaid.value = true
+    if (data.paid && data.access_token) {
+      const unlocked = await unlockCurrentResult(data.access_token)
+      if (!unlocked) {
+        payError.value = t('search.pay_failed')
+        return
+      }
       payStatusMsg.value = t('search.pay_success')
       trackEvent('paypal_pay_success')
     } else {
@@ -641,9 +738,13 @@ const startPayPolling = () => {
       const res = await fetch(`/api/v1/pay/status?order_no=${payOrderNo.value}`)
       if (!res.ok) return
       const data = await res.json()
-      if (data.paid) {
+      if (data.paid && data.access_token) {
         stopPayPolling()
-        hasPaid.value = true
+        const unlocked = await unlockCurrentResult(data.access_token)
+        if (!unlocked) {
+          payError.value = t('search.pay_failed')
+          return
+        }
         showCodeModal.value = false
         payStatusMsg.value = ''
         trackEvent('wechat_pay_success')
@@ -701,8 +802,12 @@ const submitActivationCode = async () => {
       }),
     })
     const data = await res.json()
-    if (data.success) {
-      hasPaid.value = true
+    if (data.success && data.access_token) {
+      const unlocked = await unlockCurrentResult(data.access_token)
+      if (!unlocked) {
+        codeError.value = t('search.code_error_unknown')
+        return
+      }
       showCodeModal.value = false
       trackEvent('code_activated')
     } else {
@@ -751,39 +856,33 @@ const doVote = async (side) => {
 const handleSearch = async () => {
   if (!phoneValid.value) return
   loading.value = true
+  searchError.value = ''
   const fullPhone = getDialCode(countryCode.value) + phone.value
   
   try {
-    const queryParams = new URLSearchParams({ phone: fullPhone, phone_local: phone.value })
-    if (remark.value.trim()) queryParams.set('remark', remark.value.trim())
-    const res = await fetch(`/api/v1/query?${queryParams}`)
-    const data = await res.json()
+    const { res, data } = await requestSearch(fullPhone)
     
     // Evaluate status via response standard format handling
     if (res.status === 429) {
       searchError.value = t('search.alert_rate_limit')
     } else if (data.status === 'clean') {
       resultType.value = 'clean'
+      profile.value = null
+      records.value = []
+      queryToken.value = ''
+      hasPaid.value = false
       searched.value = true
       trackEvent('search_clean')
     } else if (data.status === 'warning') {
-      resultType.value = 'warning'
-      profile.value = data.aggregated_profile
-      records.value = data.records || []
-      queryToken.value = data.query_token || ''
-      searched.value = true
+      applyWarningResult(data)
       trackEvent('search_hit', { reports: profile.value.total_independent_reports })
 
-      if (queryToken.value) {
-        try {
-          const accessRes = await fetch(`/api/v1/check-access?target_hash=${queryToken.value}`)
-          if (accessRes.ok) {
-            const accessData = await accessRes.json()
-            if (accessData.unlocked) {
-              hasPaid.value = true
-            }
-          }
-        } catch (_) { /* non-critical */ }
+      const storedAccessToken = getStoredAccessToken(queryToken.value)
+      if (!data.unlocked && storedAccessToken) {
+        const unlocked = await refreshUnlockedWarning(storedAccessToken)
+        if (!unlocked) {
+          clearAccessToken(queryToken.value)
+        }
       }
     }
   } catch(e) {

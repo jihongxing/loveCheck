@@ -69,6 +69,40 @@ func xunhuSign(params map[string]string, appSecret string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+func paymentProviderEnabled(provider string) bool {
+	switch provider {
+	case "wechat":
+		return os.Getenv("XUNHU_APPID") != "" && os.Getenv("XUNHU_APPSECRET") != "" && os.Getenv("PAY_NOTIFY_URL") != ""
+	case "alipay":
+		return os.Getenv("XUNHU_ALI_APPID") != "" && os.Getenv("XUNHU_ALI_APPSECRET") != "" && os.Getenv("PAY_NOTIFY_URL") != ""
+	case "paypal":
+		return os.Getenv("PAYPAL_CLIENT_ID") != "" && os.Getenv("PAYPAL_CLIENT_SECRET") != ""
+	default:
+		return false
+	}
+}
+
+func HandlePaymentOptions(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"code_enabled": true,
+		"providers": gin.H{
+			"wechat": paymentProviderEnabled("wechat"),
+			"alipay": paymentProviderEnabled("alipay"),
+			"paypal": paymentProviderEnabled("paypal"),
+		},
+	})
+}
+
+func issueOrderAccessGrant(order *model.PaymentOrder, clientIP string) (string, error) {
+	if order == nil || order.Status != "paid" || order.TargetHash == "" {
+		return "", nil
+	}
+	if strings.TrimSpace(clientIP) == "" || clientIP != order.ClientIP {
+		return "", nil
+	}
+	return issueAccessGrant(order.TargetHash, "payment", order.OrderNo, 30*24*time.Hour)
+}
+
 // HandlePayCreate creates a payment order for the requested provider (wechat/alipay/paypal).
 func HandlePayCreate(c *gin.Context) {
 	var req struct {
@@ -313,11 +347,21 @@ func HandlePayStatus(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	accessToken, err := issueOrderAccessGrant(&order, c.ClientIP())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "grant_issue_failed"})
+		return
+	}
+
+	resp := gin.H{
 		"order_no": order.OrderNo,
 		"status":   order.Status,
 		"paid":     order.Status == "paid",
-	})
+	}
+	if accessToken != "" {
+		resp["access_token"] = accessToken
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 // --- PayPal integration ---
@@ -504,7 +548,16 @@ func HandlePayPalCapture(c *gin.Context) {
 	}
 
 	if order.Status == "paid" {
-		c.JSON(http.StatusOK, gin.H{"paid": true, "order_no": order.OrderNo})
+		accessToken, err := issueOrderAccessGrant(&order, c.ClientIP())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "grant_issue_failed"})
+			return
+		}
+		resp := gin.H{"paid": true, "order_no": order.OrderNo}
+		if accessToken != "" {
+			resp["access_token"] = accessToken
+		}
+		c.JSON(http.StatusOK, resp)
 		return
 	}
 
@@ -548,12 +601,21 @@ func HandlePayPalCapture(c *gin.Context) {
 			"transaction_id": captureResult.ID,
 			"paid_at":        now,
 		})
+		order.Status = "paid"
 		logger.Log.Info().Str("order_no", order.OrderNo).Str("paypal_id", captureResult.ID).Msg("PayPal payment captured")
-		c.JSON(http.StatusOK, gin.H{"paid": true, "order_no": order.OrderNo})
+		accessToken, err := issueOrderAccessGrant(&order, c.ClientIP())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "grant_issue_failed"})
+			return
+		}
+		resp := gin.H{"paid": true, "order_no": order.OrderNo}
+		if accessToken != "" {
+			resp["access_token"] = accessToken
+		}
+		c.JSON(http.StatusOK, resp)
 		return
 	}
 
 	logger.Log.Warn().Str("status", captureResult.Status).Str("body", string(respBody)).Msg("PayPal capture not completed")
 	c.JSON(http.StatusOK, gin.H{"paid": false, "order_no": order.OrderNo, "status": captureResult.Status})
 }
-

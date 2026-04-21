@@ -73,7 +73,12 @@ func HandleActivate(c *gin.Context) {
 	if ac.Status == "used" {
 		if ac.TargetHash == req.TargetHash {
 			if ac.ActivatedAt != nil && time.Since(*ac.ActivatedAt).Hours() < 24 {
-				c.JSON(http.StatusOK, gin.H{"success": true, "message": "already_activated"})
+				accessToken, err := issueAccessGrant(req.TargetHash, "activation_code", ac.Code, 30*24*time.Hour)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "grant_issue_failed"})
+					return
+				}
+				c.JSON(http.StatusOK, gin.H{"success": true, "message": "already_activated", "access_token": accessToken})
 				return
 			}
 		}
@@ -89,9 +94,16 @@ func HandleActivate(c *gin.Context) {
 		"activated_at": now,
 	})
 
+	accessToken, err := issueAccessGrant(req.TargetHash, "activation_code", ac.Code, 30*24*time.Hour)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "grant_issue_failed"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "activated",
+		"success":      true,
+		"message":      "activated",
+		"access_token": accessToken,
 	})
 }
 
@@ -103,20 +115,5 @@ func HandleCheckAccess(c *gin.Context) {
 		return
 	}
 
-	var ac model.ActivationCode
-	result := db.DB.Where("target_hash = ? AND status = ?", targetHash, "used").
-		Order("activated_at DESC").First(&ac)
-	if result.Error == nil {
-		c.JSON(http.StatusOK, gin.H{"unlocked": true})
-		return
-	}
-
-	var po model.PaymentOrder
-	result = db.DB.Where("target_hash = ? AND status = ?", targetHash, "paid").First(&po)
-	if result.Error == nil {
-		c.JSON(http.StatusOK, gin.H{"unlocked": true})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"unlocked": false})
+	c.JSON(http.StatusOK, gin.H{"unlocked": hasUnlockedAccess(c, targetHash)})
 }

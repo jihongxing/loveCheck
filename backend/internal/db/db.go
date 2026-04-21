@@ -57,6 +57,7 @@ func InitDB() {
 		&model.PurchasePlatform{},
 		&model.PushSubscription{},
 		&model.PaymentOrder{},
+		&model.AccessGrant{},
 		&model.CompanyRecord{},
 		&model.CompanyStats{},
 		&model.CompanyWatchlist{},
@@ -123,6 +124,10 @@ func createOptimizedIndexes() {
 		// Payment order lookups by target_hash
 		`CREATE INDEX IF NOT EXISTS idx_payment_target_hash
 		 ON payment_orders USING HASH (target_hash)`,
+
+		// Scoped unlock access by target + client token
+		`CREATE INDEX IF NOT EXISTS idx_access_grants_target_client
+		 ON access_grants (target_hash, client_token_hash)`,
 
 		// Company records hash index
 		`CREATE INDEX IF NOT EXISTS idx_hash_company

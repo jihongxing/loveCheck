@@ -84,6 +84,7 @@ func main() {
 		api.POST("/pay/notify", writeLimiter, handler.HandlePayNotify)
 		api.GET("/pay/status", readLimiter, handler.HandlePayStatus)
 		api.POST("/pay/paypal-capture", writeLimiter, handler.HandlePayPalCapture)
+		api.GET("/pay/options", readLimiter, handler.HandlePaymentOptions)
 
 		api.GET("/push/vapid-key", handler.HandleGetVAPIDKey)
 		api.POST("/push/subscribe", writeLimiter, handler.HandlePushSubscribe)
@@ -99,6 +100,8 @@ func main() {
 			admin.POST("/platforms", handler.HandleCreatePlatform)
 			admin.PUT("/platforms/:id", handler.HandleUpdatePlatform)
 			admin.DELETE("/platforms/:id", handler.HandleDeletePlatform)
+			admin.GET("/reports", handler.HandleAdminListReports)
+			admin.PUT("/reports/:kind/:id/status", handler.HandleAdminUpdateReportStatus)
 		}
 	}
 
@@ -121,5 +124,8 @@ func getAllowedOrigins() []string {
 		}
 		return origins
 	}
-	return []string{"*"}
+	return []string{
+		"http://localhost:5173",
+		"http://127.0.0.1:5173",
+	}
 }

@@ -5,7 +5,6 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -56,6 +55,45 @@ func generateCompanyHash(registrationNo string) string {
 	return crypto.DeterministicHash(normalized)
 }
 
+func companyAppealObjectPrefix(registrationNo string) string {
+	registrationNo = strings.TrimSpace(registrationNo)
+	if len(registrationNo) == 0 {
+		return "unknown"
+	}
+	if len(registrationNo) <= 8 {
+		return registrationNo
+	}
+	return registrationNo[:8]
+}
+
+func parseSubmittedTags(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+
+	var tags []string
+	if strings.HasPrefix(raw, "[") {
+		if err := json.Unmarshal([]byte(raw), &tags); err == nil {
+			return compactTags(tags)
+		}
+	}
+
+	return compactTags(strings.Split(raw, ","))
+}
+
+func compactTags(tags []string) []string {
+	out := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			continue
+		}
+		out = append(out, tag)
+	}
+	return out
+}
+
 // HandleCompanyReport handles company abuse report submission
 func HandleCompanyReport(c *gin.Context) {
 	reporterPhone := c.PostForm("reporter_phone")
@@ -99,13 +137,7 @@ func HandleCompanyReport(c *gin.Context) {
 	}
 
 	// Convert comma-separated tags to JSON array
-	var tagsArray []string
-	if tags != "" {
-		tagsArray = strings.Split(tags, ",")
-		for i := range tagsArray {
-			tagsArray[i] = strings.TrimSpace(tagsArray[i])
-		}
-	}
+	tagsArray := parseSubmittedTags(tags)
 	tagsJSON, _ := json.Marshal(tagsArray)
 
 	// Handle evidence file uploads
@@ -144,8 +176,7 @@ func HandleCompanyReport(c *gin.Context) {
 				openedFile.Close()
 				continue
 			}
-			escapedFilename := filepath.Base(file.Filename)
-			objectName := "comp_" + crypto.MaskName(companyName) + "_" + escapedFilename
+			objectName := buildUniqueEvidenceObjectName("comp", crypto.MaskName(companyName), file.Filename)
 
 			uploadedName, err := storage.UploadEvidence(objectName, openedFile, file.Size, ct)
 			openedFile.Close()
@@ -429,8 +460,7 @@ func HandleCompanyAppeal(c *gin.Context) {
 				openedFile.Close()
 				continue
 			}
-			escapedFilename := filepath.Base(file.Filename)
-			objectName := "comp_apl_" + registrationNo[:8] + "_" + escapedFilename
+			objectName := buildUniqueEvidenceObjectName("comp_apl", companyAppealObjectPrefix(registrationNo), file.Filename)
 
 			uploadedName, err := storage.UploadEvidence(objectName, openedFile, file.Size, ct)
 			openedFile.Close()
@@ -584,8 +614,8 @@ func HandleCompanyStats(c *gin.Context) {
 		Scan(&industries)
 
 	c.JSON(http.StatusOK, gin.H{
-		"total_reports":    totalReports,
-		"total_companies":  totalCompanies,
-		"top_industries":   industries,
+		"total_reports":   totalReports,
+		"total_companies": totalCompanies,
+		"top_industries":  industries,
 	})
 }

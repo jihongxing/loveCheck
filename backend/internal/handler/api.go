@@ -98,6 +98,17 @@ func findCanonicalHash(hashes []string, fallbackPhone string) string {
 	return crypto.DeterministicHash(fallbackPhone)
 }
 
+func lockedAggregatedProfile(displayName string, reportCount int, riskScore float64, riskLevel string, firstReportAt, latestReportAt time.Time) gin.H {
+	return gin.H{
+		"display_name":              displayName,
+		"total_independent_reports": reportCount,
+		"consensus_risk_score":      riskScore,
+		"risk_level":                riskLevel,
+		"first_report_at":           firstReportAt,
+		"latest_report_at":          latestReportAt,
+	}
+}
+
 // HandleReport stores both a full-phone hash (with dial code) and a local-phone
 // hash (without dial code) for backward-compatible dual matching.
 func HandleReport(c *gin.Context) {
@@ -168,8 +179,7 @@ func HandleReport(c *gin.Context) {
 				openedFile.Close()
 				continue
 			}
-			escapedFilename := filepath.Base(file.Filename)
-			objectName := "evd_" + crypto.MaskName(targetName) + "_" + escapedFilename
+			objectName := buildUniqueEvidenceObjectName("evd", crypto.MaskName(targetName), file.Filename)
 
 			uploadedName, err := storage.UploadEvidence(objectName, openedFile, file.Size, ct)
 			openedFile.Close()
@@ -208,7 +218,7 @@ func HandleReport(c *gin.Context) {
 		Status:              "active",
 		ReporterHash:        reporterHash,
 		ReporterDisplayName: reporteridentity.NicknameFromHash(reporterHash),
-		VerificationLevel: vLevel,
+		VerificationLevel:   vLevel,
 		ReporterCity:        trustedReporterRegion(c),
 	}
 
@@ -268,7 +278,7 @@ func HandleQuery(c *gin.Context) {
 	uniqueLocations := make(map[string]bool)
 	var finalEvidences []string
 	var descriptions []string
-	displayName := matchedRecords[len(matchedRecords)-1].DisplayName
+	displayName := matchedRecords[0].DisplayName
 
 	for _, rec := range matchedRecords {
 		if strings.TrimSpace(rec.LocationCity) != "" {
@@ -351,6 +361,28 @@ func HandleQuery(c *gin.Context) {
 		appealAt = &t
 	}
 
+	unlocked := hasUnlockedAccess(c, queryToken)
+
+	if !unlocked {
+		c.JSON(http.StatusOK, gin.H{
+			"status":          "warning",
+			"message":         "Caution: We found multiple risk reports!",
+			"query_token":     queryToken,
+			"unlocked":        false,
+			"access_required": true,
+			"records":         []gin.H{},
+			"aggregated_profile": lockedAggregatedProfile(
+				displayName,
+				reportCount,
+				consensusRiskScore,
+				scoreBreakdown.RiskLevel,
+				firstReportAt,
+				latestReportAt,
+			),
+		})
+		return
+	}
+
 	records := make([]gin.H, 0, len(matchedRecords))
 	for _, rec := range matchedRecords {
 		var recTags []string
@@ -372,16 +404,18 @@ func HandleQuery(c *gin.Context) {
 			"evidences":             SignEvidenceURLs(recEvs),
 			"created_at":            rec.CreatedAt,
 			"reporter_display_name": resolveReporterDisplayName(&rec),
-			"verification_level":  inferVerificationLevel(&rec),
+			"verification_level":    inferVerificationLevel(&rec),
 			"reporter_city":         strings.TrimSpace(rec.ReporterCity),
 		})
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status":      "warning",
-		"message":     "Caution: We found multiple risk reports!",
-		"query_token": queryToken,
-		"records":     records,
+		"status":          "warning",
+		"message":         "Caution: We found multiple risk reports!",
+		"query_token":     queryToken,
+		"unlocked":        true,
+		"access_required": false,
+		"records":         records,
 		"aggregated_profile": gin.H{
 			"display_name":              displayName,
 			"total_independent_reports": reportCount,
@@ -544,12 +578,11 @@ func HandleAppeal(c *gin.Context) {
 				openedFile.Close()
 				continue
 			}
-			escapedFilename := filepath.Base(file.Filename)
 			namePrefix := targetPhone
 			if len([]rune(namePrefix)) > 4 {
 				namePrefix = string([]rune(namePrefix)[:4])
 			}
-			objectName := "apl_" + crypto.MaskName(namePrefix) + "_" + escapedFilename
+			objectName := buildUniqueEvidenceObjectName("apl", crypto.MaskName(namePrefix), file.Filename)
 
 			uploadedName, err := storage.UploadEvidence(objectName, openedFile, file.Size, ct)
 			openedFile.Close()

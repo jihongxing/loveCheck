@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(podman --version)",
+      "Bash(podman ps *)",
+      "Bash(podman logs *)",
+      "Bash(podman exec *)",
+      "Bash(go run *)",
+      "Bash(curl -s http://localhost:8080/api/v1/health)",
+      "Bash(curl *)",
+      "Bash(npm run *)",
+      "Bash(wc *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
+    ]
+  }
+}

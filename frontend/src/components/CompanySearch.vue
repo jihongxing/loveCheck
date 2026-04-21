@@ -145,13 +145,15 @@
             </div>
             <p class="record-desc">{{ record.description }}</p>
             <div v-if="record.evidences && record.evidences.length > 0" class="evidence-grid">
-              <img
+              <button
                 v-for="(evidence, idx) in record.evidences"
                 :key="idx"
-                :src="`/api/v1/evidence/${evidence}`"
+                type="button"
                 @click="openEvidence(evidence)"
-                class="evidence-img"
-              />
+                class="evidence-link"
+              >
+                {{ $t('companySearch.evidenceItem', { n: idx + 1 }) }}
+              </button>
             </div>
           </div>
         </div>
@@ -648,17 +650,20 @@ const getFingerprint = () => {
   gap: 0.75rem;
 }
 
-.evidence-img {
+.evidence-link {
   width: 100%;
-  height: 100px;
-  object-fit: cover;
+  min-height: 44px;
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: transform 0.2s;
   border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  padding: 0.75rem;
+  text-align: center;
 }
 
-.evidence-img:hover {
+.evidence-link:hover {
   transform: scale(1.05);
   box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
 }
